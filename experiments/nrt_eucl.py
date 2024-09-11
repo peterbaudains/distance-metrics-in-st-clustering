@@ -29,8 +29,8 @@ if __name__ == "__main__":
     cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples)
 
     for ti in pd.date_range(start_tw, end_tw, freq='15min'):                    
-        maxTime = str(ti)
-        minTime = str(ti - dt.timedelta(0, 7200))
+        maxTime = str(ti).replace(' ', 'T')
+        minTime = str(ti - dt.timedelta(0, 7200)).replace(' ', 'T')
         df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, maxTime=maxTime)
         run_experiment(df, cluster_algo, frame_size=7200, 
                         exp_reference='nrt_eucl_run\\twoweeks_d%s\\%s_nrt_eucl_t%s_d%s+ending%s' % \
