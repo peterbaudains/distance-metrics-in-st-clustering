@@ -7,10 +7,9 @@ import numpy as np
 import sys
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 
-from network_dbscan import networkDBSCAN
-from frame_split_method import frame_split_method
+from clustering.network_dbscan import networkDBSCAN
+from clustering.frame_split_method import frame_split_method
 from data_loader.neo4j_data_loader import DataLoaderNeo4j
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
@@ -23,9 +22,6 @@ def get_driver():
     driver=GraphDatabase.driver(uri, auth=(os.environ['NEO4J_USER'],os.environ['NEO4J_PASSWORD']))
     return driver
 
-
-
-
 log = logging.getLogger(__name__)
 
 if __name__=="__main__":
@@ -37,8 +33,8 @@ if __name__=="__main__":
 
     extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
     
-    minTime = "2023-11-08 06:30:00"
-    maxTime = "2023-11-08 14:00:00"
+    minTime = "2023-11-08T06:30:00"
+    maxTime = "2023-11-08T14:00:00"
     maxSpeed = 0.3
 
     df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, 
@@ -80,4 +76,4 @@ if __name__=="__main__":
                                  'longitude': ["mean"], 
                                  'latitude': ["mean"], 
                                  'vehicleRef': ['nunique']})\
-                           .to_csv('test_network_distance.csv', index=False)
+                           .to_csv('outputs\\test_network_distance.csv', index=False)

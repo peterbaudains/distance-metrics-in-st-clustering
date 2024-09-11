@@ -6,8 +6,8 @@ import sys
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
 
-from frame_split_method import frame_split_method
-from euclidean_dbscan import euclideanDBSCAN
+from clustering.frame_split_method import frame_split_method
+from clustering.euclidean_dbscan import euclideanDBSCAN
 
 if __name__=="__main__":
 
@@ -41,7 +41,6 @@ if __name__=="__main__":
                             geometry=sample_points, 
                             crs=4326)
 
-    iso_eps = 1./3.
     t_eps = 200
     d_eps = 300
     min_samples = 3

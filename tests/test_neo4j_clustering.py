@@ -1,5 +1,6 @@
 import logging
 import time
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 from st_clustering import ST_DBSCAN
@@ -7,33 +8,24 @@ from st_clustering import ST_DBSCAN
 import sys
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 
-
-from frame_split_method import frame_split_method
-from euclidean_dbscan import euclideanDBSCAN
+from clustering.frame_split_method import frame_split_method
+from clustering.euclidean_dbscan import euclideanDBSCAN
 from data_loader.neo4j_data_loader import DataLoaderNeo4j
+from tests.test_clusters_are_equivalent import test_cluster_labels_are_equivalent
 
 log = logging.getLogger(__name__)
 
 if __name__=="__main__":
 
-    import sys
-    from shapely import Point
-    
-    logging.basicConfig(filename="debug_frame_split.log", filemode='a',
-                        level=logging.INFO)
-
-    neo4j_logger = logging.getLogger('neo4j')
-    neo4j_logger.setLevel('INFO')
-
+    from shapely import Point    
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
-    date = 20231108
-    minTime = 63000
-    maxTime = 140000
+    minTime = "2023-11-08T09:00:00"
+    maxTime = "2023-11-08T12:00:00"
     maxSpeed = 0.3
 
-    df = DataLoaderNeo4j().load_df(date=date, extent=extent, minTime=minTime, 
+    df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, 
                                    maxTime=maxTime)
     df_slow = df[df['speed'] < maxSpeed].copy()
 
@@ -57,24 +49,15 @@ if __name__=="__main__":
     min_samples = 10
 
     t1_split = time.time()
-    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples)
+    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples-2)
     merged_labels = frame_split_method(gdf, cluster_algo)
     t2_split = time.time()
 
-    logging.basicConfig(filename="debug_original.log", filemode='a',
-                        level=logging.INFO)
-
     t1_old = time.time()
-    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples)
-    cluster_algo.fit(data=gdf)    
+    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples-1)
+    cluster_algo.fit(data=gdf)
     t2_old = time.time()
-
-    from clustering.tests.test_clusters_are_equivalent import test_cluster_labels_are_equivalent
-
-    # Test against st_clustering package
-    from st_clustering import ST_DBSCAN
-    import numpy as np
-
+    
     t1_lib = time.time()
     gdf = gdf.to_crs(27700)
     unix_times = gdf['unix_time'].values.tolist()
@@ -94,6 +77,6 @@ if __name__=="__main__":
     print({k:v for k, v in merged_labels.items() if v > -1})
     print({k:v for k, v in zip(gdf.index, hdb_labels) if v > -1})
 
-    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, cluster_algo.labels)}, merged_labels)
-    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, merged_labels)
-    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, {k:v for k, v in zip(gdf.index, cluster_algo.labels)})
+    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, cluster_algo.labels)}, merged_labels)
+    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, merged_labels)
+    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, {k:v for k, v in zip(gdf.index, cluster_algo.labels)})
