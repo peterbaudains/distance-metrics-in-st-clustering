@@ -15,14 +15,13 @@ from data_loader.neo4j_data_loader import DataLoaderNeo4j
 from tests.test_clusters_are_equivalent import test_cluster_labels_are_equivalent
 
 log = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 if __name__=="__main__":
-
-    from shapely import Point    
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    
     extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
     minTime = "2023-11-08T09:00:00"
-    maxTime = "2023-11-08T12:00:00"
+    maxTime = "2023-11-08T10:00:00"
     maxSpeed = 0.3
 
     df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, 
@@ -49,12 +48,12 @@ if __name__=="__main__":
     min_samples = 10
 
     t1_split = time.time()
-    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples-2)
+    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples)
     merged_labels = frame_split_method(gdf, cluster_algo)
     t2_split = time.time()
 
     t1_old = time.time()
-    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples-1)
+    cluster_algo = euclideanDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples)
     cluster_algo.fit(data=gdf)
     t2_old = time.time()
     
@@ -77,6 +76,6 @@ if __name__=="__main__":
     print({k:v for k, v in merged_labels.items() if v > -1})
     print({k:v for k, v in zip(gdf.index, hdb_labels) if v > -1})
 
-    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, cluster_algo.labels)}, merged_labels)
-    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, merged_labels)
-    #test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, {k:v for k, v in zip(gdf.index, cluster_algo.labels)})
+    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, cluster_algo.labels)}, merged_labels)
+    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, merged_labels)
+    test_cluster_labels_are_equivalent({k:v for k, v in zip(gdf.index, hdb_labels)}, {k:v for k, v in zip(gdf.index, cluster_algo.labels)})
