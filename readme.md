@@ -21,7 +21,7 @@ Experiments are run with the following scripts:
 
 1. `run_eucl_clustering.py` implements a single run of the DBSCAN algorithm with a Euclidean distance metric.
 
-2. `run_network_cluster.py` implements a single run of the DBSCAN algorithm with a Network distance metric.
+2. `run_network_clustering.py` implements a single run of the DBSCAN algorithm with a Network distance metric.
 
 3. `nrt_eucl.py` implements a series of runs of the DBSCAN algorithm with a Euclidean distance metric by chunking up the overall time period. This is used to construct the post-view evaluation metrics as explained in the paper cited above.
 
