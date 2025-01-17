@@ -24,6 +24,7 @@ if __name__ == "__main__":
     logging.basicConfig(filename="logs/network_experiment_%s.log" % date_str, 
                         filemode='a', level=logging.INFO)
     
+    # Experimental parameters
     extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
     minTime = "2023-11-08T06:30:00"
     maxTime = "2023-11-08T14:00:00"
@@ -32,7 +33,29 @@ if __name__ == "__main__":
     t_eps = 300
     min_samples = 10
 
-    df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, maxTime=maxTime)
+    df = DataLoaderNeo4j().load_df(extent=extent, 
+                                   minTime=minTime, 
+                                   maxTime=maxTime)
+    log.info(f"Data loaded: {df.shape[0]} records from Neo4j")
+    
+    # Need a new driver to pass to the clustering algorithm
     driver = get_driver()
-    cluster_algo = networkDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples, extent=extent, neo4jdriver=driver, simplify=True)
-    run_experiment(df, cluster_algo, frame_size=10800, exp_reference='%s_network_test_d%s_t%s' % (date_str, d_eps, t_eps))
+
+    # Build the clustering algorithm
+    cluster_algo = networkDBSCAN(d_eps=d_eps, 
+                                 t_eps=t_eps, 
+                                 min_samples=min_samples, 
+                                 extent=extent, 
+                                 neo4jdriver=driver, 
+                                 simplify=True, 
+                                 reload_sn=True)
+    
+    # Run the experiment
+    run_experiment(df=df, 
+                   cluster_algo=cluster_algo,    
+                   max_speed=maxSpeed,           
+                   frame_size=10800, 
+                   exp_reference=f'{date_str}_network_test_d{d_eps}_t{t_eps}', 
+                   save_obs=True, 
+                   simplify=True)
+    

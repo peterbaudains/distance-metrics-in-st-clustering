@@ -1,10 +1,11 @@
 import sys
+import time
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
 
 from clustering.network_dbscan import networkDBSCAN
 from data_loader.neo4j_data_loader import DataLoaderNeo4j
-from experiment import run_experiment
+from experiments.experiment import run_experiment
 
 import datetime as dt
 import logging
@@ -32,9 +33,26 @@ if __name__ == "__main__":
     t_eps = 300
     min_samples = 10
 
+    t1 = time.time()
     df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, maxTime=maxTime)
-    
+    t2 = time.time()
+    log.info(f'Data loaded. Time taken: {t2 - t1}')
+
     driver = get_driver()
  
-    cluster_algo = networkDBSCAN(d_eps=d_eps, t_eps=t_eps, min_samples=min_samples, extent=extent, neo4jdriver=driver, simplify=False)
-    run_experiment(df, cluster_algo, frame_size=10800, exp_reference='%s_network_twoweeks_d%s_t%s' % (date_str, d_eps, t_eps))
+    for simplify in [False]:
+
+        cluster_algo = networkDBSCAN(d_eps=d_eps, 
+                                     t_eps=t_eps, 
+                                     min_samples=min_samples, 
+                                     extent=extent, 
+                                     neo4jdriver=driver, 
+                                     simplify=simplify, 
+                                     reload_sn=True)
+        
+        run_experiment(df, cluster_algo, max_speed=maxSpeed, frame_size=10800, 
+                       exp_reference=f'{date_str}_network_simplify{simplify}_1Nov23to15Nov23_d{d_eps}_t{t_eps}', 
+                       save_obs=False, simplify=simplify)
+    
+        log.info(f'Experiment complete. Total time taken: {time.time() - t1}')
+        

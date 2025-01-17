@@ -100,7 +100,7 @@ def execute_query(tx, query):
 
 class networkDBSCAN(DBSCAN):
 
-    def __init__(self, d_eps, t_eps, min_samples, extent, neo4jdriver, simplify=True):
+    def __init__(self, d_eps, t_eps, min_samples, extent, neo4jdriver, simplify=True, reload_sn=True):
         DBSCAN.__init__(self, d_eps, t_eps, min_samples)
         # Expects a fresh db
         self.extent = extent
@@ -112,16 +112,18 @@ class networkDBSCAN(DBSCAN):
         # project the graph and prepare for the shortest path search.
         self.G = self.get_graph_from_osmnx(self.extent)
         
-        # Prepare data to load into neo4j
-        gdf_nodes, gdf_relationships = ox.graph_to_gdfs(self.G)
-        gdf_nodes.reset_index(inplace=True)
-        gdf_relationships.reset_index(inplace=True)
+        if reload_sn:
+            
+            # Prepare data to load into neo4j
+            gdf_nodes, gdf_relationships = ox.graph_to_gdfs(self.G)
+            gdf_nodes.reset_index(inplace=True)
+            gdf_relationships.reset_index(inplace=True)
 
-        with self.driver.session(database="networkdistancetest") as session:
-            session.execute_write(execute_query, "MATCH (n) DETACH DELETE n")
-            session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
-            session.execute_write(insert_data, node_query, gdf_nodes.drop(columns=['geometry']))
-            session.execute_write(insert_data, rels_query, gdf_relationships.drop(columns=['geometry']))
+            with self.driver.session(database="networkdistancetest") as session:
+                session.execute_write(execute_query, "MATCH (n) DETACH DELETE n")
+                session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
+                session.execute_write(insert_data, node_query, gdf_nodes.drop(columns=['geometry']))
+                session.execute_write(insert_data, rels_query, gdf_relationships.drop(columns=['geometry']))
     
     def set_data(self, data: gpd.GeoDataFrame) -> None:
         self.data = data

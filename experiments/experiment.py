@@ -8,16 +8,20 @@ from shapely import Point
 from clustering.dbscan import DBSCAN
 from clustering.frame_split_method import frame_split_method
 from clustering.cluster_uncertainty import calculate_cluster_certainty
+from clustering.post_processor import merge_occluding_clusters
+from clustering.network_dbscan import networkDBSCAN
+from clustering.euclidean_dbscan import euclideanDBSCAN
 log = logging.getLogger("experiment")
 
-maxSpeed = 0.3
 
-def run_experiment(df: pd.DataFrame, cluster_algo: DBSCAN, frame_size: int, exp_reference: str) -> None:
+def run_experiment(df: pd.DataFrame, cluster_algo: DBSCAN, max_speed: float,
+                   frame_size: int, exp_reference: str, save_obs: bool, simplify=True) -> None:
     
-    df_slow = df[df['speed'] < maxSpeed].copy()
+    df_slow = df[df['speed'] < max_speed].copy()
 
     log.info("Number of records for clustering: %s" % df_slow.shape[0])
 
+    # Calculate unix time from recordedAtTime
     df_slow['unix_time'] = ((df_slow[['recordedAtTime']] - \
                     pd.Timestamp("1970-01-01")) // \
                     pd.Timedelta('1s'))['recordedAtTime'].values
@@ -28,7 +32,6 @@ def run_experiment(df: pd.DataFrame, cluster_algo: DBSCAN, frame_size: int, exp_
     df_slow.columns = df_slow_column_names
     df_slow.reset_index(inplace=True)
 
-    df['points'] = df.apply(lambda x: Point(x.lon2, x.lat2), axis=1)
     df['unix_time'] = ((df[['recordedAtTime']] - pd.Timestamp("1970-01-01")) // \
                         pd.Timedelta('1s'))['recordedAtTime'].values
 
@@ -51,22 +54,41 @@ def run_experiment(df: pd.DataFrame, cluster_algo: DBSCAN, frame_size: int, exp_
                   left_index=True, 
                   right_on='index', 
                   how='left')
-    
-    # Save the result.
-    obs_out = f'outputs/obs_{exp_reference}'
-    df.to_csv(obs_out, index=False)
+    if save_obs:
+        # Save the result.
+        obs_out = f'outputs/obs_{exp_reference}.csv'
+        df.to_csv(obs_out, index=False)
 
     filename = 'outputs/%s.csv' % exp_reference
     cluster_df = gdf[gdf['cluster'] > 0].groupby('cluster')\
                            .agg({'recordedAtTime': ["min", "max", np.size], 
                                  'longitude': ["mean"], 
                                  'latitude': ["mean"], 
-                                 'vehicleRef': ['nunique'], 
+                                 'vehicleRef': ["nunique"],
                                  'unix_time': ["min", "max"]})
 
-    cluster_df = calculate_cluster_certainty(cluster_df, 
-                                             distance_buffer=200, 
-                                             speed_threshold=maxSpeed, 
-                                             simplify=True)
+    if cluster_df.shape[0] > 1:
+        cluster_df = merge_occluding_clusters(cluster_df, df)
 
-    cluster_df.to_csv(filename, index=True, index_label='cluster')
+    cluster_df.columns = ['recordedAtTimeMin', 'recordedAtTimeMax', 'nObs', \
+                        'longitude', 'latitude', 'nVehicleUnique', \
+                        'unixTimeMin', 'unixTimeMax']
+    
+    # Add a cluster column, which is needed for the cluster certainty 
+    # calculation in neo4j and added here to ensure consistency of the output
+    # files.
+    cluster_df.reset_index(drop=False, names='cluster', inplace=True)
+
+    # We don't need this for the NRT runs but we do need it for the two week runs...
+    if type(cluster_algo)==networkDBSCAN:
+        calculation_type = 'network'
+    elif type(cluster_algo)==euclideanDBSCAN:
+        calculation_type = 'eucl'
+    if cluster_df.shape[0] > 0:
+        cluster_df = calculate_cluster_certainty(cluster_df, 
+                                                calculation_type=calculation_type,
+                                                distance_buffer=200, 
+                                                speed_threshold=max_speed, 
+                                                simplify=simplify)
+
+    cluster_df.to_csv(filename, index=False, index_label='cluster')

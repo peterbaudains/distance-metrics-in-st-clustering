@@ -5,7 +5,7 @@ sys.path.append(dirname(dirname(realpath(__file__))))
 
 from clustering.euclidean_dbscan import euclideanDBSCAN
 from data_loader.neo4j_data_loader import DataLoaderNeo4j
-from experiment import run_experiment
+from experiments.experiment import run_experiment
 
 import datetime as dt
 import logging
@@ -32,6 +32,7 @@ if __name__ == "__main__":
         maxTime = str(ti).replace(' ', 'T')
         minTime = str(ti - dt.timedelta(0, 7200)).replace(' ', 'T')
         df = DataLoaderNeo4j().load_df(extent=extent, minTime=minTime, maxTime=maxTime)
-        run_experiment(df, cluster_algo, frame_size=7200, 
-                        exp_reference='nrt_eucl_run\\twoweeks_d%s\\%s_nrt_eucl_t%s_d%s+ending%s' % \
-                        (d_eps, date_str, t_eps, d_eps, maxTime.replace(' ','_').replace(':','-')))
+        run_experiment(df, cluster_algo, max_speed=maxSpeed, frame_size=7200, 
+                       exp_reference='nrt_eucl_run_twoweeks_d%s\\%s_nrt_eucl_t%s_d%s+ending%s' % \
+                       (d_eps, date_str, t_eps, d_eps, maxTime.replace(' ','_').replace(':','-')), 
+                       save_obs=False)

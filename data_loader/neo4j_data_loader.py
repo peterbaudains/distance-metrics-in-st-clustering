@@ -69,7 +69,8 @@ class DataLoaderNeo4j:
                                       minTime=minTime, 
                                       maxTime=maxTime)
         
-        log.info('Data loaded from neo4j')
+        log.info(f"Data loaded: {df.shape[0]} records from Neo4j")
+    
         # Convert recordedAtTime to datetime
         df['recordedAtTime'] = df['recordedAtTime'].apply(neo4jtime.DateTime.to_native).dt.tz_localize(None)
         return df

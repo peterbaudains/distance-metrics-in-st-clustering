@@ -3,6 +3,9 @@ import os
 from neo4j import GraphDatabase
 import osmnx as ox
 from clustering.network_dbscan import node_query, rels_query, next_closest_intersection_query, insert_data, execute_query
+import logging
+
+log = logging.getLogger()
 
 def get_driver():
     uri=os.environ['NEO4J_SERVER']
@@ -78,8 +81,8 @@ def get_neighbourhood_data_by_cluster(cluster_df, distance_buffer):
     driver=get_driver()
     with driver.session(database='busopendata') as session:
         for i, s in cluster_df.iterrows():
-            print(s)
             df_sub = session.execute_read(get_nearby_data_for_network_cluster_certainty_calc, s, distance_buffer)
+            df_sub['cluster_index'] = i
             df = pd.concat([df, df_sub])
     if df.shape[0] == 0:
         raise ValueError("No data populated in df.")
@@ -89,7 +92,9 @@ def get_neighbourhood_data_by_cluster(cluster_df, distance_buffer):
 
     return df
 
+
 def calculate_cluster_certainty(cluster_df: pd.DataFrame, 
+                                calculation_type: str,
                                 distance_buffer:float, 
                                 speed_threshold: float, 
                                 simplify:bool) -> pd.DataFrame:
@@ -101,41 +106,42 @@ def calculate_cluster_certainty(cluster_df: pd.DataFrame,
     run_experiment function in experiment.py
 
     '''
-
-    cluster_df.columns = ['recordedAtTimeMin', 'recordedAtTimeMax', 'nObs', \
-                          'longitude', 'latitude', 'nVehicleUnique', \
-                          'unixTimeMin', 'unixTimeMax']
-
     df_nbhd = get_neighbourhood_data_by_cluster(cluster_df, distance_buffer)
 
-    extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
-    extent_reformatted = [extent[3], extent[2], extent[0], extent[1]]
-    G = ox.graph_from_bbox(bbox=extent_reformatted, network_type='drive', simplify=simplify)
-    gdf_nodes, gdf_relationships = ox.graph_to_gdfs(G)
-    gdf_nodes.reset_index(inplace=True)
-    gdf_relationships.reset_index(inplace=True)
-    
-    driver=get_driver()
-    with driver.session(database="networkdistancetest") as session:
-        session.execute_write(execute_query, "MATCH (n) DETACH DELETE n")
-        session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
-        session.execute_write(insert_data, node_query, gdf_nodes.drop(columns=['geometry']))
-        session.execute_write(insert_data, rels_query, gdf_relationships.drop(columns=['geometry']))
+    if calculation_type == 'eucl':
+        slow = df_nbhd[df_nbhd['speed_ms'] < speed_threshold].groupby('cluster_index').size()
+        fast = df_nbhd[df_nbhd['speed_ms'] >= speed_threshold].groupby('cluster_index').size()
+        slow.name='slow_moving_observations'
+        fast.name='fast_moving_observations'
+        certainty_df = pd.concat([slow, fast], axis=1)
+        certainty_df['cluster_certainty'] = certainty_df['slow_moving_observations'] / (certainty_df['slow_moving_observations'] + certainty_df['fast_moving_observations'])
+        df = cluster_df.merge(certainty_df, left_index=True, right_index=True)
 
-    df_nbhd['nearest_node'], df_nbhd['distance'] = ox.nearest_nodes(G, df_nbhd['longitude'], df_nbhd['latitude'], return_dist=True)
-    cluster_df['nearest_node'], cluster_df['distance'] = ox.nearest_nodes(G, cluster_df['longitude'], cluster_df['latitude'], return_dist=True)
+    if calculation_type == 'network':
+        extent = [-0.16172376,-0.07189224,51.49288835,51.52433822]
+        extent_reformatted = [extent[3], extent[2], extent[0], extent[1]]
+        G = ox.graph_from_bbox(bbox=extent_reformatted, network_type='drive', simplify=simplify)
+        gdf_nodes, gdf_relationships = ox.graph_to_gdfs(G)
+        gdf_nodes.reset_index(inplace=True)
+        gdf_relationships.reset_index(inplace=True)
+        
+        driver=get_driver()
+        with driver.session(database="networkdistancetest") as session:
+            session.execute_write(execute_query, "MATCH (n) DETACH DELETE n")
+            session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
+            session.execute_write(insert_data, node_query, gdf_nodes.drop(columns=['geometry']))
+            session.execute_write(insert_data, rels_query, gdf_relationships.drop(columns=['geometry']))
 
-    with driver.session(database="networkdistancetest") as session:
-        session.execute_write(insert_data, closest_intersection_query, df_nbhd.reset_index())
-        session.execute_write(insert_data, closest_intersection_query_centroid, cluster_df.reset_index())
-        session.execute_write(execute_query, next_closest_intersection_query)
-        session.execute_write(execute_query, project_graph_query)
-        neighbourhood_data = session.execute_read(get_cluster_certainty, distance_buffer, speed_threshold)
-        session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
-        session.execute_write(execute_query, "MATCH (o:Observation) DETACH DELETE o")
+        df_nbhd['nearest_node'], df_nbhd['distance'] = ox.nearest_nodes(G, df_nbhd['longitude'], df_nbhd['latitude'], return_dist=True)
+        cluster_df['nearest_node'], cluster_df['distance'] = ox.nearest_nodes(G, cluster_df['longitude'], cluster_df['latitude'], return_dist=True)
 
-    print(cluster_df)
-    print(neighbourhood_data)
-
-    df = cluster_df.merge(neighbourhood_data, left_index=True, right_on='sourceNodeId')
+        with driver.session(database="networkdistancetest") as session:
+            session.execute_write(insert_data, closest_intersection_query, df_nbhd.reset_index())
+            session.execute_write(insert_data, closest_intersection_query_centroid, cluster_df.reset_index())
+            session.execute_write(execute_query, next_closest_intersection_query)
+            session.execute_write(execute_query, project_graph_query)
+            neighbourhood_data = session.execute_read(get_cluster_certainty, distance_buffer, speed_threshold)
+            session.execute_write(execute_query, "CALL gds.graph.drop('network_distance',false)")
+            session.execute_write(execute_query, "MATCH (o:Observation) DETACH DELETE o")
+        df = cluster_df.merge(neighbourhood_data, left_index=True, right_on='sourceNodeId')
     return df

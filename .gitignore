@@ -4,3 +4,7 @@ __pycache__
 *.ipynb
 cache
 *.csv
+.vscode
+logs
+outputs
+*.png
